@@ -18,7 +18,7 @@ function applyRuby(chars, ruby, group, option) {
 }
 
 class RubySetting {
-	constructor(parent, def = {}) {
+	constructor(parent, def = {}, skipmode = false) {
 		this.parent = parent
 
 		this.alignList = new NameValueList(this.parent, {
@@ -58,6 +58,13 @@ class RubySetting {
 
 		this.xOffset = convertInt(def.xOffset)
 		this.yOffset = convertInt(def.yOffset)
+
+		if (skipmode) {
+			this.inputSkipmode = this.parent.add('checkbox', undefined, '重複スキップ')
+			this.inputSkipmode.value = def.skipmode
+		} else {
+			this.inputSkipmode = { value: false }
+		}
 	}
 	getValues() {
 		return {
@@ -68,6 +75,9 @@ class RubySetting {
 			xOffset: this.xOffset,
 			yOffset: this.yOffset,
 		}
+	}
+	isSkip() {
+		return this.inputSkipmode.value
 	}
 }
 

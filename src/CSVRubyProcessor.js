@@ -10,6 +10,7 @@ const DEFAULT = loadconfig(NAME, {
 	parentspacing: 2,
 	xOffset: 0,
 	yOffset: 0,
+	skipmode: false,
 })
 
 app.doScript(main, ScriptLanguage.JAVASCRIPT, [], UndoModes.FAST_ENTIRE_SCRIPT)
@@ -17,7 +18,7 @@ app.doScript(main, ScriptLanguage.JAVASCRIPT, [], UndoModes.FAST_ENTIRE_SCRIPT)
 function main() {
 	const dialog = new Window('dialog', 'ルビ設定')
 
-	const rubySettings = new RubySetting(dialog, DEFAULT)
+	const rubySettings = new RubySetting(dialog, DEFAULT, true)
 
 	new ActionButtons(dialog, {
 		width: 96,
@@ -32,6 +33,7 @@ function main() {
 	}
 
 	const rubyOption = rubySettings.getValues()
+	const skipmode = rubySettings.isSkip()
 
 	// ファイルオープン
 	const fileObj = File.openDialog('', (() => {
@@ -149,8 +151,24 @@ function main() {
 
 			if (!target) break
 
+			let rubyFlag = false
+
+			if (skipmode) {
+				// ターゲット文字列内にルビが振られた文字が1文字でもあるか
+				for (let k = 0; k < target.characters.length; k++) {
+					rubyFlag = target.characters[k].rubyFlag
+
+					if (rubyFlag instanceof Array) {
+						// itemByRange で取得した character のプロパティは配列
+						rubyFlag = rubyFlag[0]
+					}
+
+					if (rubyFlag) break
+				}
+			}
+
 			// すでにルビが振られているなら処理しない
-			if (!target.rubyFlag[0]) {
+			if (!rubyFlag) {
 				if (data.ruby.length > 1) {
 					for (let k = 0; k < data.ruby.length; k++) {
 						if (!data.ruby[k]) continue

@@ -15,7 +15,14 @@
 var NAME = 'pixivRubyConverter';
 
 function loadconfig(name, def) {
-  var scriptFile = new File($.fileName);
+  var scriptFile = function () {
+    try {
+      return app.activeScript;
+    } catch (err) {
+      return File(err.fileName);
+    }
+  }();
+
   var configFile = new File(scriptFile.parent + '/RUBY_PROCESSOR.conf');
 
   if (configFile.exists) {
@@ -137,9 +144,13 @@ function applyRuby(chars, ruby, group, option) {
 }
 
 var RubySetting = function () {
-  function RubySetting(parent, def) {
+  function RubySetting(parent, def, skipmode) {
     if (def === void 0) {
       def = {};
+    }
+
+    if (skipmode === void 0) {
+      skipmode = false;
     }
 
     this.parent = parent;
@@ -176,6 +187,15 @@ var RubySetting = function () {
     this.parentSpacingList.group.preferredSize.width = 210;
     this.xOffset = convertInt(def.xOffset);
     this.yOffset = convertInt(def.yOffset);
+
+    if (skipmode) {
+      this.inputSkipmode = this.parent.add('checkbox', undefined, '重複スキップ');
+      this.inputSkipmode.value = def.skipmode;
+    } else {
+      this.inputSkipmode = {
+        value: false
+      };
+    }
   }
 
   var _proto = RubySetting.prototype;
@@ -189,6 +209,10 @@ var RubySetting = function () {
       xOffset: this.xOffset,
       yOffset: this.yOffset
     };
+  };
+
+  _proto.isSkip = function isSkip() {
+    return this.inputSkipmode.value;
   };
 
   return RubySetting;

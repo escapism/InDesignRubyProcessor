@@ -15,7 +15,14 @@
 var NAME = 'CSVRubyProcessor';
 
 function loadconfig(name, def) {
-  var scriptFile = new File($.fileName);
+  var scriptFile = function () {
+    try {
+      return app.activeScript;
+    } catch (err) {
+      return File(err.fileName);
+    }
+  }();
+
   var configFile = new File(scriptFile.parent + '/RUBY_PROCESSOR.conf');
 
   if (configFile.exists) {
@@ -213,9 +220,13 @@ function applyRuby(chars, ruby, group, option) {
 }
 
 var RubySetting = function () {
-  function RubySetting(parent, def) {
+  function RubySetting(parent, def, skipmode) {
     if (def === void 0) {
       def = {};
+    }
+
+    if (skipmode === void 0) {
+      skipmode = false;
     }
 
     this.parent = parent;
@@ -252,6 +263,15 @@ var RubySetting = function () {
     this.parentSpacingList.group.preferredSize.width = 210;
     this.xOffset = convertInt(def.xOffset);
     this.yOffset = convertInt(def.yOffset);
+
+    if (skipmode) {
+      this.inputSkipmode = this.parent.add('checkbox', undefined, '重複スキップ');
+      this.inputSkipmode.value = def.skipmode;
+    } else {
+      this.inputSkipmode = {
+        value: false
+      };
+    }
   }
 
   var _proto = RubySetting.prototype;
@@ -265,6 +285,10 @@ var RubySetting = function () {
       xOffset: this.xOffset,
       yOffset: this.yOffset
     };
+  };
+
+  _proto.isSkip = function isSkip() {
+    return this.inputSkipmode.value;
   };
 
   return RubySetting;
@@ -327,13 +351,14 @@ var DEFAULT = loadconfig(NAME, {
   overhang: 1,
   parentspacing: 2,
   xOffset: 0,
-  yOffset: 0
+  yOffset: 0,
+  skipmode: false
 });
 app.doScript(main, ScriptLanguage.JAVASCRIPT, [], UndoModes.FAST_ENTIRE_SCRIPT);
 
 function main() {
   var dialog = new Window('dialog', 'ルビ設定');
-  var rubySettings = new RubySetting(dialog, DEFAULT);
+  var rubySettings = new RubySetting(dialog, DEFAULT, true);
   new ActionButtons(dialog, {
     width: 96,
     height: 24
@@ -345,6 +370,7 @@ function main() {
   }
 
   var rubyOption = rubySettings.getValues();
+  var skipmode = rubySettings.isSkip();
   var fileObj = File.openDialog('', function () {
     if (/^windows/i.test($.os)) {
       return '*.csv';
@@ -451,13 +477,26 @@ function main() {
       }
 
       if (!target) break;
+      var rubyFlag = false;
 
-      if (!target.rubyFlag[0]) {
+      if (skipmode) {
+        for (var k = 0; k < target.characters.length; k++) {
+          rubyFlag = target.characters[k].rubyFlag;
+
+          if (rubyFlag instanceof Array) {
+            rubyFlag = rubyFlag[0];
+          }
+
+          if (rubyFlag) break;
+        }
+      }
+
+      if (!rubyFlag) {
         if (data.ruby.length > 1) {
-          for (var k = 0; k < data.ruby.length; k++) {
-            if (!data.ruby[k]) continue;
-            if (k === target.length) break;
-            applyRuby(target.characters[k], data.ruby[k], false, rubyOption);
+          for (var _k = 0; _k < data.ruby.length; _k++) {
+            if (!data.ruby[_k]) continue;
+            if (_k === target.length) break;
+            applyRuby(target.characters[_k], data.ruby[_k], false, rubyOption);
           }
         } else {
           applyRuby(target, data.ruby[0], target.length > 1, rubyOption);
