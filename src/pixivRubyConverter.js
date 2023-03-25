@@ -4,61 +4,78 @@ import ActionButtons from './modules/actionButtons'
 
 /** デフォルト設定 */
 const DEFAULT = loadconfig(NAME, {
-	alignments: 4,
-	position: 0,
-	overhang: 1,
-	parentspacing: 2,
-	xOffset: 0,
-	yOffset: 0,
+  alignments: 4,
+  position: 0,
+  overhang: 1,
+  parentspacing: 2,
+  xOffset: 0,
+  yOffset: 0,
+  keepParameter: true,
 })
 
 app.doScript(main, ScriptLanguage.JAVASCRIPT, [], UndoModes.FAST_ENTIRE_SCRIPT);
 
 function main() {
-	const dialog = new Window('dialog', 'ルビ設定')
+  const dialog = new Window('dialog', 'ルビ設定')
 
-	const rubySettings = new RubySetting(dialog, DEFAULT)
+  const settings = (() => {
+    if (DEFAULT.keepParameter) {
+      if (typeof pixivRubyConverter !== 'undefined') {
+        return pixivRubyConverter
+      } else {
+        this.pixivRubyConverter = null
+      }
+    }
+    return DEFAULT
+  })()
 
-	new ActionButtons(dialog, {
-		width: 96,
-		height: 24
-	})
+  const rubySettings = new RubySetting(dialog, settings)
 
-	const ret = dialog.show()
+  new ActionButtons(dialog, {
+    width: 96,
+    height: 24
+  })
 
-	// キャンセル
-	if (ret != 1) {
-		return
-	}
+  const ret = dialog.show()
 
-	const rubyOption = rubySettings.getValues()
+  // キャンセル
+  if (ret != 1) {
+    return
+  }
 
-	const PATTERN = '\\[\\[rb: *(.+?) *> *(.+?) *\\]\\]'
+  const rubyOption = rubySettings.getValues()
 
-	app.findGrepPreferences = NothingEnum.nothing;
-	app.findChangeGrepOptions.kanaSensitive = true;
-	app.findChangeGrepOptions.widthSensitive = true;
-	app.findChangeGrepOptions.includeFootnotes = false;
-	app.findChangeGrepOptions.includeHiddenLayers = false;
-	app.findChangeGrepOptions.includeLockedLayersForFind = false;
-	app.findChangeGrepOptions.includeLockedStoriesForFind = false;
-	app.findChangeGrepOptions.includeMasterPages = false;
+  // 設定値を保存
+  if (DEFAULT.keepParameter) {
+    pixivRubyConverter = rubySettings.getSettings()
+  }
 
-	app.findGrepPreferences.findWhat = PATTERN
+  const PATTERN = '\\[\\[rb: *(.+?) *> *(.+?) *\\]\\]'
 
-	const found = app.activeDocument.findGrep()
+  app.findGrepPreferences = NothingEnum.nothing;
+  app.findChangeGrepOptions.kanaSensitive = true;
+  app.findChangeGrepOptions.widthSensitive = true;
+  app.findChangeGrepOptions.includeFootnotes = false;
+  app.findChangeGrepOptions.includeHiddenLayers = false;
+  app.findChangeGrepOptions.includeLockedLayersForFind = false;
+  app.findChangeGrepOptions.includeLockedStoriesForFind = false;
+  app.findChangeGrepOptions.includeMasterPages = false;
 
-	for (let i = 0; i < found.length; i++) {
-		const chars = found[i]
+  app.findGrepPreferences.findWhat = PATTERN
 
-		const matched = RegExp(PATTERN).exec(chars.contents),
-			base = matched[1],
-			ruby = matched[2]
+  const found = app.activeDocument.findGrep()
 
-		chars.contents = base
+  for (let i = 0; i < found.length; i++) {
+    const chars = found[i]
 
-		applyRuby(chars, ruby, true, rubyOption)
-	}
-	
-	app.findGrepPreferences = NothingEnum.nothing;
+    const matched = RegExp(PATTERN).exec(chars.contents),
+      base = matched[1],
+      ruby = matched[2]
+
+    chars.contents = base
+
+    applyRuby(chars, ruby, true, rubyOption)
+  }
+
+  app.findGrepPreferences = NothingEnum.nothing;
 }

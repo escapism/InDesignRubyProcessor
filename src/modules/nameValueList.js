@@ -32,6 +32,9 @@ class NameValueList {
 	changeValue() {
 		this.value = this.values[this.list.selection.index]
 	}
+  getIndex() {
+    return this.list.selection.index
+  }
 }
 
 export default NameValueList

@@ -4,191 +4,208 @@ import ActionButtons from './modules/actionButtons'
 
 /** デフォルト設定 */
 const DEFAULT = loadconfig(NAME, {
-	alignments: 4,
-	position: 0,
-	overhang: 1,
-	parentspacing: 2,
-	xOffset: 0,
-	yOffset: 0,
-	skipmode: false,
+  alignments: 4,
+  position: 0,
+  overhang: 1,
+  parentspacing: 2,
+  xOffset: 0,
+  yOffset: 0,
+  skipmode: false,
+  keepParameter: true,
 })
 
 app.doScript(main, ScriptLanguage.JAVASCRIPT, [], UndoModes.FAST_ENTIRE_SCRIPT)
 
 function main() {
-	const dialog = new Window('dialog', 'ルビ設定')
+  const dialog = new Window('dialog', 'ルビ設定')
 
-	const rubySettings = new RubySetting(dialog, DEFAULT, true)
+  const settings = (() => {
+    if (DEFAULT.keepParameter) {
+      if (typeof CSVRubyProcessor !== 'undefined') {
+        return CSVRubyProcessor
+      } else {
+        this.CSVRubyProcessor = null
+      }
+    }
+    return DEFAULT
+  })()
 
-	new ActionButtons(dialog, {
-		width: 96,
-		height: 24
-	})
+  const rubySettings = new RubySetting(dialog, settings, true)
 
-	const ret = dialog.show()
+  new ActionButtons(dialog, {
+    width: 96,
+    height: 24
+  })
 
-	// キャンセル
-	if (ret != 1) {
-		return
-	}
+  const ret = dialog.show()
 
-	const rubyOption = rubySettings.getValues()
-	const skipmode = rubySettings.isSkip()
+  // キャンセル
+  if (ret != 1) {
+    return
+  }
 
-	// ファイルオープン
-	const fileObj = File.openDialog('', (() => {
-		if (/^windows/i.test($.os)) {
-			return '*.csv'
-		} else {
-			return F => {
-				return F instanceof Folder || /\.csv$/i.test(F.fsName);
-			}
-		}
-	})())
-	if (!fileObj) return
+  const rubyOption = rubySettings.getValues()
+  const skipmode = rubySettings.isSkip()
 
-	const open = fileObj.open('r')
+  // 設定値を保存
+  if (DEFAULT.keepParameter) {
+    CSVRubyProcessor = rubySettings.getSettings()
+  }
 
-	if (!open) {
-		alert('ファイルが開けません。')
-		return
-	}
+  // ファイルオープン
+  const fileObj = File.openDialog('', (() => {
+    if (/^windows/i.test($.os)) {
+      return '*.csv'
+    } else {
+      return F => {
+        return F instanceof Folder || /\.csv$/i.test(F.fsName);
+      }
+    }
+  })())
+  if (!fileObj) return
 
-	// 何も選択されていない場合、全てのテキストフレームを対象にする
-	let frames = null
-	if (app.activeDocument.selection.length) {
-		frames = app.activeDocument.selection
-	} else {
-		const pages = app.activeDocument.pages
-		frames = []
-		for (let m = 0; m < pages.length; m++) {
-			let frameInPage = pages[m].textFrames
-			if (frameInPage.length) {
-				frameInPage = Array.prototype.slice.call(frameInPage)
-				frames = frames.concat(frameInPage)
-			}
-		}
-	}
+  const open = fileObj.open('r')
 
-	// CSVパース
-	// [対象, ルビ, 文脈, フラグ]
-	const csv = fileObj.read()
-	const parsed = parseCSV(csv)
-	const rubyData = []
+  if (!open) {
+    alert('ファイルが開けません。')
+    return
+  }
 
-	for (let i = 0; i < parsed.length; i++) {
-		const line = parsed[i]
-		if (line.length < 2) continue
+  // 何も選択されていない場合、全てのテキストフレームを対象にする
+  let frames = null
+  if (app.activeDocument.selection.length) {
+    frames = app.activeDocument.selection
+  } else {
+    const pages = app.activeDocument.pages
+    frames = []
+    for (let m = 0; m < pages.length; m++) {
+      let frameInPage = pages[m].textFrames
+      if (frameInPage.length) {
+        frameInPage = Array.prototype.slice.call(frameInPage)
+        frames = frames.concat(frameInPage)
+      }
+    }
+  }
 
-		rubyData.push({
-			base: line[0], // ルビを振る文字
-			ruby: kanaUpper(line[1].trim()).split('　'), // ルビ : 全角スペースで分割
-			context: line[2] ? line[2].trim() : '', // 文脈
-			flag: convertInt(line[3], 0) // フラグ 0 1 2
-		})
+  // CSVパース
+  // [対象, ルビ, 文脈, フラグ]
+  const csv = fileObj.read()
+  const parsed = parseCSV(csv)
+  const rubyData = []
 
-		if (rubyData.flag > 2) rubyData.flag = 0
-	}
+  for (let i = 0; i < parsed.length; i++) {
+    const line = parsed[i]
+    if (line.length < 2) continue
 
-	// 検索条件セット
-	app.findTextPreferences = NothingEnum.nothing;
-	app.findChangeTextOptions.caseSensitive = true;
-	app.findChangeTextOptions.kanaSensitive = true;
-	app.findChangeTextOptions.widthSensitive = true;
-	app.findChangeTextOptions.includeFootnotes = false;
-	app.findChangeTextOptions.includeHiddenLayers = false;
-	app.findChangeTextOptions.includeLockedLayersForFind = false;
-	app.findChangeTextOptions.includeLockedStoriesForFind = false;
-	app.findChangeTextOptions.includeMasterPages = false;
+    rubyData.push({
+      base: line[0], // ルビを振る文字
+      ruby: kanaUpper(line[1].trim()).split('　'), // ルビ : 全角スペースで分割
+      context: line[2] ? line[2].trim() : '', // 文脈
+      flag: convertInt(line[3], 0) // フラグ 0 1 2
+    })
 
-	app.findGrepPreferences = NothingEnum.nothing;
-	app.findChangeGrepOptions.kanaSensitive = true;
-	app.findChangeGrepOptions.widthSensitive = true;
-	app.findChangeGrepOptions.includeFootnotes = false;
-	app.findChangeGrepOptions.includeHiddenLayers = false;
-	app.findChangeGrepOptions.includeLockedLayersForFind = false;
-	app.findChangeGrepOptions.includeLockedStoriesForFind = false;
-	app.findChangeGrepOptions.includeMasterPages = false;
+    if (rubyData.flag > 2) rubyData.flag = 0
+  }
 
-	const doc = app.activeDocument
-	let lastPage
+  // 検索条件セット
+  app.findTextPreferences = NothingEnum.nothing;
+  app.findChangeTextOptions.caseSensitive = true;
+  app.findChangeTextOptions.kanaSensitive = true;
+  app.findChangeTextOptions.widthSensitive = true;
+  app.findChangeTextOptions.includeFootnotes = false;
+  app.findChangeTextOptions.includeHiddenLayers = false;
+  app.findChangeTextOptions.includeLockedLayersForFind = false;
+  app.findChangeTextOptions.includeLockedStoriesForFind = false;
+  app.findChangeTextOptions.includeMasterPages = false;
 
-	// データセットのループ
-	for (let i = 0; i < rubyData.length; i++) {
-		const data = rubyData[i]
+  app.findGrepPreferences = NothingEnum.nothing;
+  app.findChangeGrepOptions.kanaSensitive = true;
+  app.findChangeGrepOptions.widthSensitive = true;
+  app.findChangeGrepOptions.includeFootnotes = false;
+  app.findChangeGrepOptions.includeHiddenLayers = false;
+  app.findChangeGrepOptions.includeLockedLayersForFind = false;
+  app.findChangeGrepOptions.includeLockedStoriesForFind = false;
+  app.findChangeGrepOptions.includeMasterPages = false;
 
-		const method = data.context ? 'Grep' : 'Text'
+  const doc = app.activeDocument
+  let lastPage
 
-		app[`find${method}Preferences`].findWhat = data.context || data.base
+  // データセットのループ
+  for (let i = 0; i < rubyData.length; i++) {
+    const data = rubyData[i]
 
-		const foundItems = doc[`find${method}`]()
+    const method = data.context ? 'Grep' : 'Text'
 
-		lastPage = null
+    app[`find${method}Preferences`].findWhat = data.context || data.base
 
-		for (let j = 0; j < foundItems.length; j++) {
-			const item = foundItems[j]
+    const foundItems = doc[`find${method}`]()
 
-			// ページ内で1回きり
-			if (data.flag === 2) {
-				const pageName = item.parentTextFrames[item.parentTextFrames.length - 1].parentPage.name;
-				if (lastPage === pageName) {
-					continue
-				}
-				lastPage = pageName
-			}
+    lastPage = null
 
-			let target
-			if (data.context) {
-				const start = item.contents.indexOf(data.base)
-				if (start === -1) {
-					target = false
-				} else {
-					target = item.characters.itemByRange(start, start + data.base.length - 1)
-				}
-			} else {
-				target = item
-			}
+    for (let j = 0; j < foundItems.length; j++) {
+      const item = foundItems[j]
 
-			if (!target) break
+      // ページ内で1回きり
+      if (data.flag === 2) {
+        const pageName = item.parentTextFrames[item.parentTextFrames.length - 1].parentPage.name;
+        if (lastPage === pageName) {
+          continue
+        }
+        lastPage = pageName
+      }
 
-			let rubyFlag = false
+      let target
+      if (data.context) {
+        const start = item.contents.indexOf(data.base)
+        if (start === -1) {
+          target = false
+        } else {
+          target = item.characters.itemByRange(start, start + data.base.length - 1)
+        }
+      } else {
+        target = item
+      }
 
-			if (skipmode) {
-				// ターゲット文字列内にルビが振られた文字が1文字でもあるか
-				for (let k = 0; k < target.characters.length; k++) {
-					rubyFlag = target.characters[k].rubyFlag
+      if (!target) break
 
-					if (rubyFlag instanceof Array) {
-						// itemByRange で取得した character のプロパティは配列
-						rubyFlag = rubyFlag[0]
-					}
+      let rubyFlag = false
 
-					if (rubyFlag) break
-				}
-			}
+      if (skipmode) {
+        // ターゲット文字列内にルビが振られた文字が1文字でもあるか
+        for (let k = 0; k < target.characters.length; k++) {
+          rubyFlag = target.characters[k].rubyFlag
 
-			// すでにルビが振られているなら処理しない
-			if (!rubyFlag) {
-				if (data.ruby.length > 1) {
-					for (let k = 0; k < data.ruby.length; k++) {
-						if (!data.ruby[k]) continue
-						if (k === target.length) break
+          if (rubyFlag instanceof Array) {
+            // itemByRange で取得した character のプロパティは配列
+            rubyFlag = rubyFlag[0]
+          }
 
-						applyRuby(target.characters[k], data.ruby[k], false, rubyOption)
-					}
-				} else {
-					applyRuby(target, data.ruby[0], target.length > 1, rubyOption)
-				}
-			}
+          if (rubyFlag) break
+        }
+      }
 
-			// ドキュメント内で1回きり
-			if (data.flag === 1) {
-				break
-			}
-		}
-	}
+      // すでにルビが振られているなら処理しない
+      if (!rubyFlag) {
+        if (data.ruby.length > 1) {
+          for (let k = 0; k < data.ruby.length; k++) {
+            if (!data.ruby[k]) continue
+            if (k === target.length) break
 
-	app.findTextPreferences = NothingEnum.nothing;
-	app.findGrepPreferences = NothingEnum.nothing;
-	fileObj.close()
+            applyRuby(target.characters[k], data.ruby[k], false, rubyOption)
+          }
+        } else {
+          applyRuby(target, data.ruby[0], target.length > 1, rubyOption)
+        }
+      }
+
+      // ドキュメント内で1回きり
+      if (data.flag === 1) {
+        break
+      }
+    }
+  }
+
+  app.findTextPreferences = NothingEnum.nothing;
+  app.findGrepPreferences = NothingEnum.nothing;
+  fileObj.close()
 }

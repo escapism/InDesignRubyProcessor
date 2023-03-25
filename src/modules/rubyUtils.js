@@ -76,6 +76,17 @@ class RubySetting {
 			yOffset: this.yOffset,
 		}
 	}
+  getSettings() {
+    return {
+			alignments: this.alignList.getIndex(),
+			position: this.positionList.getIndex(),
+			overhang: this.overhangList.getIndex(),
+			parentspacing: this.parentSpacingList.getIndex(),
+			xOffset: this.xOffset,
+			yOffset: this.yOffset,
+      skipmode: this.isSkip(),
+    }
+  }
 	isSkip() {
 		return this.inputSkipmode.value
 	}
