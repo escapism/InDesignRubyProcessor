@@ -1,6 +1,6 @@
 /*
- * CSVRubyProcessor
- * Version 1.0
+ * pixivRubyConverter
+ * Version 1.1
  *
  * (c) 2022 uco
  *
@@ -8,11 +8,12 @@
  * http://opensource.org/licenses/mit-license.php
  */
 
-//DESCRIPTION:CSVファイルでルビを一括設定
+//DESCRIPTION:pixivのルビ書式を変換
 
 #target indesign
+#targetengine 'utsutsunogare'
 
-var NAME = 'CSVRubyProcessor';
+var NAME = 'pixivRubyConverter';
 
 function loadconfig(name, def) {
   var scriptFile = function () {
@@ -42,66 +43,6 @@ function loadconfig(name, def) {
   return def;
 }
 
-function parseCSV(csv) {
-  var arr = [[]];
-  var i = line = 0;
-  var quotFlag = false;
-  var item = '';
-
-  while (csv[i]) {
-    var c = csv[i];
-
-    switch (c) {
-      case '"':
-        if (csv[i + 1] === '"') {
-          item += '"';
-          i++;
-        } else {
-          quotFlag = !quotFlag;
-        }
-
-        break;
-
-      case ',':
-        if (quotFlag) {
-          item += c;
-        } else {
-          arr[line].push(item);
-          item = '';
-        }
-
-        break;
-
-      case '\r':
-        if (quotFlag) {
-          item += c;
-        }
-
-        break;
-
-      case '\n':
-        if (quotFlag) {
-          item += c;
-        } else if (arr[line].length) {
-          arr[line].push(item);
-          item = '';
-          line++;
-          arr.push([]);
-        }
-
-        break;
-
-      default:
-        item += c;
-    }
-
-    i++;
-  }
-
-  arr[line].push(item);
-  return arr;
-}
-
 function convertInt(text, def, abs) {
   if (def === void 0) {
     def = 0;
@@ -127,22 +68,6 @@ function full2half(str) {
   if (typeof str !== 'string') return str;
   return str.replace(/[０-９]/g, function (s) {
     return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
-  });
-}
-
-function kanaUpper(text) {
-  return text.replace(/[ぁぃぅぇぉゕゖっゃゅょゎァィゥェォヵヶッャュョヮ]/g, function (match) {
-    var code = match.charCodeAt();
-
-    if (match === 'ゕ' || match === 'ヵ') {
-      code -= 74;
-    } else if (match === 'ゖ' || match === 'ヶ') {
-      code -= 69;
-    } else {
-      code++;
-    }
-
-    return String.fromCharCode(code);
   });
 }
 
@@ -197,6 +122,10 @@ var NameValueList = function () {
 
   _proto.changeValue = function changeValue() {
     this.value = this.values[this.list.selection.index];
+  };
+
+  _proto.getIndex = function getIndex() {
+    return this.list.selection.index;
   };
 
   return NameValueList;
@@ -287,6 +216,18 @@ var RubySetting = function () {
     };
   };
 
+  _proto.getSettings = function getSettings() {
+    return {
+      alignments: this.alignList.getIndex(),
+      position: this.positionList.getIndex(),
+      overhang: this.overhangList.getIndex(),
+      parentspacing: this.parentSpacingList.getIndex(),
+      xOffset: this.xOffset,
+      yOffset: this.yOffset,
+      skipmode: this.isSkip()
+    };
+  };
+
   _proto.isSkip = function isSkip() {
     return this.inputSkipmode.value;
   };
@@ -352,13 +293,28 @@ var DEFAULT = loadconfig(NAME, {
   parentspacing: 2,
   xOffset: 0,
   yOffset: 0,
-  skipmode: false
+  keepParameter: true
 });
 app.doScript(main, ScriptLanguage.JAVASCRIPT, [], UndoModes.FAST_ENTIRE_SCRIPT);
 
 function main() {
+  var _this = this;
+
   var dialog = new Window('dialog', 'ルビ設定');
-  var rubySettings = new RubySetting(dialog, DEFAULT, true);
+
+  var settings = function () {
+    if (DEFAULT.keepParameter) {
+      if (typeof pixivRubyConverter !== 'undefined') {
+        return pixivRubyConverter;
+      } else {
+        _this.pixivRubyConverter = null;
+      }
+    }
+
+    return DEFAULT;
+  }();
+
+  var rubySettings = new RubySetting(dialog, settings);
   new ActionButtons(dialog, {
     width: 96,
     height: 24
@@ -370,67 +326,12 @@ function main() {
   }
 
   var rubyOption = rubySettings.getValues();
-  var skipmode = rubySettings.isSkip();
-  var fileObj = File.openDialog('', function () {
-    if (/^windows/i.test($.os)) {
-      return '*.csv';
-    } else {
-      return function (F) {
-        return F instanceof Folder || /\.csv$/i.test(F.fsName);
-      };
-    }
-  }());
-  if (!fileObj) return;
-  var open = fileObj.open('r');
 
-  if (!open) {
-    alert('ファイルが開けません。');
-    return;
+  if (DEFAULT.keepParameter) {
+    pixivRubyConverter = rubySettings.getSettings();
   }
 
-  var frames = null;
-
-  if (app.activeDocument.selection.length) {
-    frames = app.activeDocument.selection;
-  } else {
-    var pages = app.activeDocument.pages;
-    frames = [];
-
-    for (var m = 0; m < pages.length; m++) {
-      var frameInPage = pages[m].textFrames;
-
-      if (frameInPage.length) {
-        frameInPage = Array.prototype.slice.call(frameInPage);
-        frames = frames.concat(frameInPage);
-      }
-    }
-  }
-
-  var csv = fileObj.read();
-  var parsed = parseCSV(csv);
-  var rubyData = [];
-
-  for (var i = 0; i < parsed.length; i++) {
-    var line = parsed[i];
-    if (line.length < 2) continue;
-    rubyData.push({
-      base: line[0],
-      ruby: kanaUpper(line[1].trim()).split('　'),
-      context: line[2] ? line[2].trim() : '',
-      flag: convertInt(line[3], 0)
-    });
-    if (rubyData.flag > 2) rubyData.flag = 0;
-  }
-
-  app.findTextPreferences = NothingEnum.nothing;
-  app.findChangeTextOptions.caseSensitive = true;
-  app.findChangeTextOptions.kanaSensitive = true;
-  app.findChangeTextOptions.widthSensitive = true;
-  app.findChangeTextOptions.includeFootnotes = false;
-  app.findChangeTextOptions.includeHiddenLayers = false;
-  app.findChangeTextOptions.includeLockedLayersForFind = false;
-  app.findChangeTextOptions.includeLockedStoriesForFind = false;
-  app.findChangeTextOptions.includeMasterPages = false;
+  var PATTERN = '\\[\\[rb: *(.+?) *> *(.+?) *\\]\\]';
   app.findGrepPreferences = NothingEnum.nothing;
   app.findChangeGrepOptions.kanaSensitive = true;
   app.findChangeGrepOptions.widthSensitive = true;
@@ -439,77 +340,17 @@ function main() {
   app.findChangeGrepOptions.includeLockedLayersForFind = false;
   app.findChangeGrepOptions.includeLockedStoriesForFind = false;
   app.findChangeGrepOptions.includeMasterPages = false;
-  var doc = app.activeDocument;
-  var lastPage;
+  app.findGrepPreferences.findWhat = PATTERN;
+  var found = app.activeDocument.findGrep();
 
-  for (var _i = 0; _i < rubyData.length; _i++) {
-    var data = rubyData[_i];
-    var method = data.context ? 'Grep' : 'Text';
-    app["find" + method + "Preferences"].findWhat = data.context || data.base;
-    var foundItems = doc["find" + method]();
-    lastPage = null;
-
-    for (var j = 0; j < foundItems.length; j++) {
-      var item = foundItems[j];
-
-      if (data.flag === 2) {
-        var pageName = item.parentTextFrames[item.parentTextFrames.length - 1].parentPage.name;
-
-        if (lastPage === pageName) {
-          continue;
-        }
-
-        lastPage = pageName;
-      }
-
-      var target = void 0;
-
-      if (data.context) {
-        var start = item.contents.indexOf(data.base);
-
-        if (start === -1) {
-          target = false;
-        } else {
-          target = item.characters.itemByRange(start, start + data.base.length - 1);
-        }
-      } else {
-        target = item;
-      }
-
-      if (!target) break;
-      var rubyFlag = false;
-
-      if (skipmode) {
-        for (var k = 0; k < target.characters.length; k++) {
-          rubyFlag = target.characters[k].rubyFlag;
-
-          if (rubyFlag instanceof Array) {
-            rubyFlag = rubyFlag[0];
-          }
-
-          if (rubyFlag) break;
-        }
-      }
-
-      if (!rubyFlag) {
-        if (data.ruby.length > 1) {
-          for (var _k = 0; _k < data.ruby.length; _k++) {
-            if (!data.ruby[_k]) continue;
-            if (_k === target.length) break;
-            applyRuby(target.characters[_k], data.ruby[_k], false, rubyOption);
-          }
-        } else {
-          applyRuby(target, data.ruby[0], target.length > 1, rubyOption);
-        }
-      }
-
-      if (data.flag === 1) {
-        break;
-      }
-    }
+  for (var i = 0; i < found.length; i++) {
+    var chars = found[i];
+    var matched = RegExp(PATTERN).exec(chars.contents),
+        base = matched[1],
+        ruby = matched[2];
+    chars.contents = base;
+    applyRuby(chars, ruby, true, rubyOption);
   }
 
-  app.findTextPreferences = NothingEnum.nothing;
   app.findGrepPreferences = NothingEnum.nothing;
-  fileObj.close();
 }

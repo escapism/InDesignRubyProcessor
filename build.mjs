@@ -41,7 +41,8 @@ glob.sync(`${pattern}.js`, {
 		banner += `//DESCRIPTION:${resource.description}\n\n`
 	}
 
-	banner += "#target indesign\n\n"
+	banner += `#target indesign
+#targetengine 'utsutsunogare'\n\n`
 	banner += `var NAME = '${filename}';\n`
 
 	const inputOptions = {
@@ -50,7 +51,7 @@ glob.sync(`${pattern}.js`, {
 	};
 	const outputOptions = {
 		format: "es",
-		file: path.resolve(distDir, `${filename}.jsx`),
+		file: path.resolve(distDir, `${resource.name}.jsx`),
 		banner
 	};
 	await build(inputOptions, outputOptions);
