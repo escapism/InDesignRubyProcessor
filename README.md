@@ -101,14 +101,16 @@ See 'RUBY_PROCESSOR.conf'. It is vanilla JavaScript file.
 
 スクリプトパネルに表示されるのが邪魔なときは、スクリプトパネル右上のメニューから「サポートされていないファイルを表示」のチェックを外してください。
 
+バージョン1.1以降、ダイアログで変更した値はアプリケーションを終了するまで保持されます。この機能をオフにするには、 RUBY_PROCESSOR.conf で各スクリプトの 'keepParameter' を 'false' にしてください。
+
 ## Requirements
 
 I have checked on environment below.
 
 以下の環境で動作確認済みです。
 
-- InDesign 2022 / macOS Big Sur
-- InDesign 2022 / Windows 10
+- InDesign 2023 / macOS Ventura
+- InDesign 2023 / Windows 10
 
 ## License
 
